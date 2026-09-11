@@ -19,6 +19,8 @@ import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { RECONNECT_DEFAULTS, resolveReconnectPolicy, startConnection } from './connection.ts'
 import type { ReconnectConfig } from './connection.ts'
+import { createOAuthSession, requireCredentials, resolveOAuthConfig } from './oauth.ts'
+import type { OAuthConfig, OAuthSession } from './oauth.ts'
 // Side-effect type import: declaration-merges `ctx.tools` onto Context.
 import type {} from '@deepseek-ai/dsh-tools'
 
@@ -86,6 +88,12 @@ export interface StreamableHttpConfig {
   url: string
   /** Additional headers attached to MCP requests. */
   headers: Record<string, string>
+  /**
+   * OAuth settings for a server that authenticates with the MCP authorization
+   * flow. Omission keeps the static `headers` behavior; the two are
+   * independent, so a server may carry both.
+   */
+  oauth?: OAuthConfig
   /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
@@ -99,8 +107,8 @@ export type Config = StdioConfig | StreamableHttpConfig
 
 type StdioConfigInput = Omit<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>
   & Partial<Pick<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>>
-type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>
-  & Partial<Pick<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>>
+type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'headers' | 'oauth' | 'toolCallTimeoutMs' | 'failOnStartupError'>
+  & Partial<Pick<StreamableHttpConfig, 'headers' | 'oauth' | 'toolCallTimeoutMs' | 'failOnStartupError'>>
 type ConfigInput = StdioConfigInput | StreamableHttpConfigInput
 
 const Reconnect: z<ReconnectConfig> = z.object({
@@ -108,6 +116,21 @@ const Reconnect: z<ReconnectConfig> = z.object({
   initialDelayMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(RECONNECT_DEFAULTS.initialDelayMs),
   maxDelayMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(RECONNECT_DEFAULTS.maxDelayMs),
   maxAttempts: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(RECONNECT_DEFAULTS.maxAttempts),
+})
+
+/**
+ * Every field is judged again by `resolveOAuthConfig`, which is also what a
+ * programmatic construction that bypassed this schema reaches; the schema
+ * exists so the accepted surface is visible in the generated configuration
+ * catalog.
+ */
+const OAuth: z<OAuthConfig> = z.object({
+  redirectPort: z.number().step(1).min(1).max(65_535).required(false),
+  redirectPath: z.string().required(false),
+  scopes: z.array(String).default([]),
+  clientName: z.string().required(false),
+  authorizationServerUrl: z.string().required(false),
+  authorizationTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).required(false),
 })
 
 export const Config = z.union([
@@ -127,6 +150,7 @@ export const Config = z.union([
     serverName: z.string().required().pattern(SERVER_NAME_PATTERN),
     url: z.string().required(),
     headers: z.dict(String).default({}),
+    oauth: OAuth,
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
     failOnStartupError: z.boolean().default(false),
     reconnect: Reconnect,
@@ -167,10 +191,27 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     return () => void names.delete(config.serverName)
   }, 'mcp-client.serverName')
 
+  // OAuth state is resolved before any effect registers, so an unusable
+  // setting (or a composition with no credential store to hold a grant) fails
+  // THIS instance at load rather than at the first 401.
+  const oauth: OAuthSession | undefined = config.transport === 'streamable-http' && config.oauth !== undefined
+    ? createOAuthSession({
+      credentials: requireCredentials(ctx, `mcp-client(${config.serverName}): oauth`),
+      serverName: config.serverName,
+      config: resolveOAuthConfig(config.oauth, config.serverName, `mcp-client(${config.serverName}): oauth`),
+      presentAuthorization: (authorizationUrl) => {
+        // The URL is the whole instruction a user needs, and it is the only
+        // thing this plugin can do with it on its own: a surface that can open
+        // or render it consumes the URL, not this plugin.
+        ctx.logger.warn(`${config.serverName}: authorization required — open ${authorizationUrl.href}`)
+      },
+    })
+    : undefined
+
   // The supervisor owns the client/transport generations, the reconnect
   // loop, and the live tool registrations; disposal stops reconnection,
   // quiesces in-flight work, and unregisters the current generation.
-  const connection = startConnection(ctx, config, reconnect)
+  const connection = startConnection(ctx, config, reconnect, oauth)
 
   ctx.effect(() => {
     return () => connection.dispose()

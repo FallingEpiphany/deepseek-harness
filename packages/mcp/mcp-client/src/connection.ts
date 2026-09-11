@@ -16,6 +16,7 @@
  */
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js'
 import { ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
@@ -23,6 +24,7 @@ import { createTransport } from './transport.ts'
 import { syncTools } from './tools.ts'
 import type { ToolBridgeOptions, ToolDisposers } from './tools.ts'
 import type { Config } from './index.ts'
+import type { OAuthSession } from './oauth.ts'
 
 /** Automatic reconnect policy for one MCP server connection. */
 export interface ReconnectConfig {
@@ -104,6 +106,12 @@ export interface ConnectionHandle {
    */
   ready: Promise<ConnectionOutcome>
   /**
+   * Reconnect now, outside the backoff schedule. An authorization that
+   * completes after the supervisor stopped is the caller's signal to use this:
+   * the server is not in an outage, it was waiting on a human.
+   */
+  reconnect(): void
+  /**
    * Stop reconnection, close the live client, wait for the in-flight attempt
    * and queued tool syncs to quiesce, then unregister every tool this server
    * still owns.
@@ -118,9 +126,15 @@ export interface ConnectionHandle {
  * @param ctx - Cordis context providing the `tools` registry and logger.
  * @param config - Resolved plugin config selecting the transport and server identity.
  * @param policy - Resolved reconnect policy from {@link resolveReconnectPolicy}.
+ * @param oauth - OAuth state for this server, when the config enables it.
  * @returns Handle with a `ready` promise for startup-await and a `dispose` for teardown.
  */
-export function startConnection(ctx: Context, config: Config, policy: ResolvedReconnectPolicy): ConnectionHandle {
+export function startConnection(
+  ctx: Context,
+  config: Config,
+  policy: ResolvedReconnectPolicy,
+  oauth?: OAuthSession,
+): ConnectionHandle {
   const label = `mcp-client(${config.serverName})`
   const opts: ToolBridgeOptions = {
     registrationFailure: 'contain',
@@ -144,6 +158,13 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
   let reconnectTimer: NodeJS.Timeout | undefined
   /** Consecutive failed connection attempts within the current outage. */
   let failedAttempts = 0
+  /**
+   * Set while the last attempt failed because this server requires
+   * authorization the user has not granted. That is not an outage — no amount
+   * of backoff changes it — so the supervisor stops instead of spending its
+   * attempt budget on a state only a human can clear.
+   */
+  let authorizationPending = false
   /** When the current generation finished connect + initial sync; undefined while down. */
   let connectedAt: number | undefined
   /** The real error from the first connection attempt, for startup-await diagnostics. */
@@ -174,6 +195,10 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     if (!isCurrent(generation)) return
     client = undefined
     clientClosed = undefined
+    if (authorizationPending) {
+      ctx.logger.warn(`${label}: authorization is required before this server can connect — complete the login, then reload the plugin or restart the Host`)
+      return
+    }
     scheduleReconnect()
   }
 
@@ -269,7 +294,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       },
     )
     try {
-      await generation.connect(createTransport(config))
+      await generation.connect(createTransport(config, oauth?.provider))
       if (hasClosed()) {
         attemptSettled = true
         generationDown(generation)
@@ -278,6 +303,11 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       await enqueueSync(generation, startup ? startupOpts : opts)
     } catch (error) {
       if (firstAttemptError === undefined) firstAttemptError = error
+      // The SDK throws UnauthorizedError when a server requires authorization
+      // the provider could not satisfy. Only that typed signal means "a human
+      // must act": every other failure, including a generic 500, stays an
+      // ordinary connection failure and is retried on the backoff schedule.
+      if (oauth !== undefined && error instanceof UnauthorizedError) authorizationPending = true
       // Disposal clears current ownership before it closes the generation, so
       // only a live supervisor reports an attempt failure.
       if (isCurrent(generation)) ctx.logger.warn(`${label}: connection attempt failed: ${String(error)}`)
@@ -324,6 +354,16 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
 
   return {
     ready,
+    reconnect(): void {
+      if (disposed || client !== undefined) return
+      if (reconnectTimer !== undefined) {
+        clearTimeout(reconnectTimer)
+        reconnectTimer = undefined
+      }
+      authorizationPending = false
+      failedAttempts = 0
+      settling = connectGeneration(false)
+    },
     async dispose(): Promise<void> {
       disposed = true
       if (reconnectTimer !== undefined) {
