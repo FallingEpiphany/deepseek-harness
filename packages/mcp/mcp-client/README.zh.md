@@ -58,6 +58,7 @@ kind: "package-reference"
 | `serverName` | 必填 | 服务器工具名称的 namespace；`[A-Za-z0-9_-]{1,32}`，在一个注册作用域内唯一 |
 | `command` / `args` / `env` / `cwd` | — | stdio：可执行文件、参数、合并到清洗过的环境之上的额外环境变量、工作目录 |
 | `url` / `headers` | — | streamable-http：端点 URL 与额外请求标头 |
+| `oauth` | — | streamable-http：MCP 授权流程设置，见上文 |
 | `toolCallTimeoutMs` | `60,000` | 每次 `tools/call` 调用的超时 |
 | `failOnStartupError` | `false` | 初始连接或工具同步失败时拒绝插件激活 |
 | `reconnect.enabled` | `true` | 连接丢失后自动重新连接 |
@@ -92,6 +93,39 @@ kind: "package-reference"
 服务器连接断开时——例如本地服务器进程崩溃——插件会以从 500 ms 起逐次翻倍、上限 30 s 的延迟自动重连，并刷新工具集；重连进度在日志中可见。中断期间最后已知的工具仍会列出，但对它们的调用会失败，直到服务器恢复。连续失败十次后，该服务器的工具会被移除，重连停止，直到你重载配置或重启 harness；服务器持续连接一段时间后，该计数会重置。设置 `reconnect.enabled: false` 可禁用自动重连——此时工具在断开后仍会列出，但调用失败，直到你重载。编辑配置项会在原地重载服务器连接，未变的名称保持不变。
 
 -----
+
+### 使用 OAuth 认证
+
+通过 MCP 授权流程认证的服务器改用 `oauth`，而不是静态标头。省略它即保持 `headers` 行为，两者相互独立：一个服务器可以同时带有两者。
+
+```yaml
+- id: mcp-remote
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: remote
+    transport: streamable-http
+    url: https://mcp.example/mcp
+    oauth:
+      redirectPort: 41873
+      scopes: ['mcp:tools']
+```
+
+| 字段 | 默认值 | 含义 |
+|---|---|---|
+| `oauth.redirectPort` | — | 重定向监听器绑定的回环端口。对永不重定向用户代理的服务器可省略。端口必须固定，因为授权服务器会精确校验重定向 URI。 |
+| `oauth.redirectPath` | `/callback` | 回环重定向端点的路径；需要 `redirectPort`。 |
+| `oauth.scopes` | `[]` | 授权时请求的作用域。 |
+| `oauth.clientName` | `dsh` | 动态注册时呈现的客户端名称。 |
+| `oauth.authorizationServerUrl` | — | 直接使用该授权服务器，而不是去发现一个。 |
+| `oauth.authorizationTimeoutMs` | `300,000` | 一次已启动的授权流程最多等待重定向多久。 |
+
+三条事实决定这条流程的行为：
+
+- **授权凭证存放在凭据存储中，而不是配置里。** 注册信息、令牌、PKCE 校验值和发现状态都是 `mcp-client/<serverName>` 下的记录，因此一个服务器永远读不到另一个的授权凭证，轮换后的令牌在下一个请求即生效。
+- **需要授权不是一次中断。** 需要用户完成登录而尚未完成的服务器会停止重连循环并报出授权 URL，因为再多的退避也无法改变该状态。其余任何失败——包括一般的 500——都按正常计划继续重试。
+- **被拒绝就是被拒绝。** 重定向的 `state` 会先与发起它的那次流程比对，然后才使用其授权码，因此属于另一次请求的重定向会被丢弃，而不是拿去换取令牌。
+
+OAuth 需要组合中存在凭据提供方。基础组合会加载本地存储；没有凭据存储的组合会拒绝加载这类服务器，而不是以未认证状态连接。
 
 <a id="understand-the-implementation"></a>
 ## 理解实现
@@ -187,6 +221,8 @@ kind: "package-reference"
 
 
 这些限制说明你无法用本插件做什么、以及何时需要运维注意。它们是当前包约束，不是与其他 MCP 客户端的对比，也不是任务积压。
+
+- **交互式登录需要人和可达端口** — 授权码流程会停止重连循环，直到有人完成浏览器步骤；没有凭据存储的组合根本无法保存授权凭证。
 
 - **只桥接 MCP 的工具能力**——资源与提示词没有 harness 消费机制，暂缓实现。
 - **启动与发现超时继承自 MCP SDK**——插件不暴露连接或发现超时；每次 `initialize` 与分页 `tools/list` 请求都使用 SDK 默认的 60 秒请求超时，因此无响应的服务器或 cursor chain 在初始同步完成期间可能同时延迟激活与 teardown。

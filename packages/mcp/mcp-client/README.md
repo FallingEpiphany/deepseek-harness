@@ -58,6 +58,7 @@ Add one entry per server; nothing else is required. After the harness starts, th
 | `serverName` | required | Namespace for the server's tool names; `[A-Za-z0-9_-]{1,32}`, unique inside one registration scope |
 | `command` / `args` / `env` / `cwd` | — | stdio: executable, arguments, extra env merged over scrubbed ambient env, working directory |
 | `url` / `headers` | — | streamable-http: endpoint URL and extra request headers |
+| `oauth` | — | streamable-http: MCP authorization flow settings, described above |
 | `toolCallTimeoutMs` | `60,000` | Timeout per `tools/call` invocation |
 | `failOnStartupError` | `false` | Reject plugin activation when the initial connection or tool synchronization fails |
 | `reconnect.enabled` | `true` | Reconnect automatically after a lost connection |
@@ -94,6 +95,39 @@ When a server connection drops — for example a local server process crashes �
 -----
 
 <a id="understand-the-implementation"></a>
+### Authenticating with OAuth
+
+A server that authenticates through the MCP authorization flow takes `oauth` instead of a static header. Omitting it keeps the `headers` behavior, and the two are independent: a server may carry both.
+
+```yaml
+- id: mcp-remote
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: remote
+    transport: streamable-http
+    url: https://mcp.example/mcp
+    oauth:
+      redirectPort: 41873
+      scopes: ['mcp:tools']
+```
+
+| Field | Default | Meaning |
+|---|---|---|
+| `oauth.redirectPort` | — | Loopback port the redirect listener binds. Omit it for a server that never redirects a user agent. A fixed port is required because an authorization server validates the redirect URI exactly. |
+| `oauth.redirectPath` | `/callback` | Path of the loopback redirect endpoint; requires `redirectPort`. |
+| `oauth.scopes` | `[]` | Scopes requested during authorization. |
+| `oauth.clientName` | `dsh` | Client name presented in dynamic registration. |
+| `oauth.authorizationServerUrl` | — | Authorization server to use instead of discovering one. |
+| `oauth.authorizationTimeoutMs` | `300,000` | How long a started authorization flow may wait for the redirect. |
+
+Three facts govern the flow:
+
+- **The grant lives in the credential store, not in configuration.** Registration, tokens, the PKCE verifier, and discovery state are records under `mcp-client/<serverName>`, so one server can never read another's grant and a rotated token takes effect on the next request.
+- **Authorization is not an outage.** A server that needs a login the user has not completed stops the reconnect loop and reports the authorization URL, because no amount of backoff changes that state. Every other failure — a generic 500 included — keeps retrying on the normal schedule.
+- **A refusal is a refusal.** The redirect's `state` is compared against the flow that started it before its code is used, so a redirect belonging to a different request is discarded rather than exchanged.
+
+OAuth needs a credential provider in the composition. The base composition loads the local store; a composition without one refuses to load such a server instead of connecting unauthenticated.
+
 ## Understand the implementation
 
 <details>
@@ -187,6 +221,8 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 
 These limits describe what you cannot do with this plugin and when it needs operational attention. They are current package constraints, not a comparison with other MCP clients or a task backlog.
+
+- **An interactive login needs a person and a reachable port** — the authorization-code flow stops the reconnect loop until a human completes the browser step, and a composition with no credential store cannot hold a grant at all.
 
 - **Tools are the only bridged MCP capability** — Resources and Prompts have no harness consumer mechanism and are deferred.
 - **Startup and discovery timeouts are inherited from the MCP SDK** — the plugin exposes no connection or discovery timeout; each `initialize` and paginated `tools/list` request uses the SDK's 60-second request default, so an unresponsive server or cursor chain can delay both activation and teardown while the initial synchronization settles.
