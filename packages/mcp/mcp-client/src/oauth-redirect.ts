@@ -61,17 +61,6 @@ const page = (title: string, detail: string): string => [
 ].join('')
 
 /**
- * Read the query string of one redirect request.
- *
- * @param request - The incoming redirect request.
- * @returns The parsed query parameters.
- */
-function queryOf(request: IncomingMessage): URLSearchParams {
-  /* v8 ignore next -- an HTTP/1.1 request always carries a target; the fallback only keeps the parse total */
-  return new URL(request.url ?? '/', 'http://127.0.0.1').searchParams
-}
-
-/**
  * Start listening for the redirect that completes one authorization flow.
  *
  * @param options - The bind port, redirect path, the state this flow issued, and the flow deadline.
@@ -113,14 +102,18 @@ export function startRedirectListener(options: {
   }
 
   const server = createServer((request: IncomingMessage, response: ServerResponse) => {
+    // Parsed once: the path decides whether this request is ours at all, and
+    // the query carries the outcome when it is.
+    /* v8 ignore next -- an HTTP/1.1 request always carries a target; the fallback only keeps the parse total */
+    const target = new URL(request.url ?? '/', 'http://127.0.0.1')
     // Anything but this flow's redirect path is not ours to answer; the port
     // is predictable, so an unrelated request must not consume the flow.
-    if (request.method !== 'GET' || new URL(request.url ?? '/', 'http://127.0.0.1').pathname !== options.path) {
+    if (request.method !== 'GET' || target.pathname !== options.path) {
       response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
       response.end('not found')
       return
     }
-    const query = queryOf(request)
+    const query = target.searchParams
     const failure = query.get('error')
     if (failure !== null) {
       const description = query.get('error_description')
