@@ -1555,6 +1555,12 @@ export interface StreamableHttpConfig {
   url: string
   /** Additional headers attached to MCP requests. */
   headers: Record<string, string>
+  /**
+   * OAuth settings for a server that authenticates with the MCP authorization
+   * flow. Omission keeps the static `headers` behavior; the two are
+   * independent, so a server may carry both.
+   */
+  oauth?: OAuthConfig
   /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
@@ -1574,9 +1580,36 @@ export interface ReconnectConfig {
   /** Consecutive failed attempts per outage before giving up for good (default 10). */
   maxAttempts?: number
 }
+
+/** OAuth settings for one Streamable HTTP MCP server. */
+export interface OAuthConfig {
+  /**
+   * Port the loopback redirect listener binds. Omit it for a grant that never
+   * redirects a user agent — the SDK treats an absent `redirectUrl` as the
+   * non-interactive case. When present, the port is a configured constant
+   * rather than a per-flow choice: an authorization server validates the
+   * redirect URI exactly, and a dynamically registered client must name the
+   * same URI it will use.
+   */
+  redirectPort?: number
+  /** Path of the loopback redirect endpoint (default `/callback`); requires `redirectPort`. */
+  redirectPath?: string
+  /** Scopes requested during authorization; omission requests none. */
+  scopes?: string[]
+  /** Client name presented in dynamic registration (default `dsh`). */
+  clientName?: string
+  /**
+   * Authorization server to use instead of discovering one from the MCP
+   * server. Set this only for a deployment whose authorization server is not
+   * reachable through RFC 9728 metadata.
+   */
+  authorizationServerUrl?: string
+  /** How long a started authorization flow may wait for the redirect (default 300000). */
+  authorizationTimeoutMs?: number
+}
 ```
 
-Source: [`packages/mcp/mcp-client/src/index.ts:98`](../packages/mcp/mcp-client/src/index.ts)
+Source: [`packages/mcp/mcp-client/src/index.ts:106`](../packages/mcp/mcp-client/src/index.ts)
 
 <a id="deepseek-aidsh-message-feedback"></a>
 
