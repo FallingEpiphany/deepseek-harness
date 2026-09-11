@@ -86,6 +86,12 @@ describe('resolveOAuthConfig', () => {
       .toThrow('redirectPath requires redirectPort')
   })
 
+  it('carries an explicitly configured authorization server, and omits it when none is named', () => {
+    expect(resolveOAuthConfig({ redirectPort: 1024, authorizationServerUrl: 'https://as.example' }, 'alpha', 'test').authorizationServerUrl)
+      .toBe('https://as.example')
+    expect(resolveOAuthConfig(interactive, 'alpha', 'test').authorizationServerUrl).toBeUndefined()
+  })
+
   it('rejects a server name that cannot address a stored record', () => {
     expect(() => resolveOAuthConfig(interactive, 'Alpha_1', 'test'))
       .toThrow('cannot address stored OAuth credentials')
@@ -210,6 +216,29 @@ describe('OAuthClientProvider', () => {
     expect(await session.provider.discoveryState?.()).toEqual({ authorizationServerUrl: 'https://as.example' })
     await writeGrantPayload(credentials, serverRecords('alpha').discovery, 'not an object')
     expect(await session.provider.discoveryState?.()).toBeUndefined()
+  })
+
+  it('refuses a stored verifier that is not a pair of strings', async () => {
+    const { session, credentials } = createSession()
+    const key = serverRecords('alpha').verifier
+    await writeGrantPayload(credentials, key, { codeVerifier: 'v', state: 7 })
+    await expect(session.provider.codeVerifier()).rejects.toThrow('no PKCE code verifier is stored')
+    await writeGrantPayload(credentials, key, 'not an object')
+    await expect(session.provider.codeVerifier()).rejects.toThrow('no PKCE code verifier is stored')
+  })
+
+  it('invalidates one scope without touching the others', async () => {
+    const { session, stored } = createSession()
+    await session.provider.saveTokens({ access_token: 'at', token_type: 'Bearer' })
+    await session.provider.saveClientInformation?.({ client_id: 'abc' })
+    await session.provider.saveCodeVerifier('verifier-1')
+    await session.provider.saveDiscoveryState?.({ authorizationServerUrl: 'https://as.example' })
+
+    await session.provider.invalidateCredentials?.('discovery')
+    expect(stored.has('mcp-client/alpha-discovery')).toBe(false)
+    expect(stored.has('mcp-client/alpha')).toBe(true)
+    expect(stored.has('mcp-client/alpha-client')).toBe(true)
+    expect(stored.has('mcp-client/alpha-verifier')).toBe(true)
   })
 
   it('invalidates exactly the records a scope names', async () => {

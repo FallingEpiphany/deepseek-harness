@@ -74,13 +74,13 @@ async function startAuthorizationServer(options: { refuseRefresh?: boolean } = {
 }
 
 /** One session wired to a fake store, with the issued authorization URLs captured. */
-async function createSession(serverUrl: string) {
+async function createSession(serverUrl: string, options: { scopes?: string[] } = {}) {
   const fake = createFakeCredentials()
   const presented: URL[] = []
   const session = createOAuthSession({
     credentials: fake.credentials,
     serverName: 'alpha',
-    config: resolveOAuthConfig({ redirectPort: 41_901, scopes: ['mcp:tools'] }, 'alpha', 'test.oauth'),
+    config: resolveOAuthConfig({ redirectPort: 41_901, scopes: options.scopes ?? ['mcp:tools'] }, 'alpha', 'test.oauth'),
     presentAuthorization: (url) => { presented.push(url) },
   })
   return { ...fake, session, presented, serverUrl }
@@ -123,6 +123,27 @@ describe('authorization-code flow end to end', () => {
       expect(typeof tokens?.access_token).toBe('string')
       expect(tokens?.access_token).not.toBe('')
       expect(await run.session.provider.clientInformation()).toBeTruthy()
+    } finally {
+      await authServer.close()
+    }
+  })
+
+  it('runs the same flow for a server that requests no scope', async () => {
+    const authServer = await startAuthorizationServer()
+    const serverUrl = 'https://mcp.example/mcp'
+    const run = await createSession(serverUrl, { scopes: [] })
+    try {
+      await run.session.provider.saveDiscoveryState?.({
+        authorizationServerUrl: authServer.issuerUrl.href,
+        authorizationServerMetadata: authServer.metadata,
+      })
+      expect(await run.session.authorize({ serverUrl })).toBe('REDIRECT')
+      // No scope is requested, so the authorization URL carries none.
+      expect(run.presented[0]?.searchParams.get('scope')).toBeNull()
+
+      const code = await run.session.acceptCallback(await followAuthorization(run.presented[0] as URL))
+      expect(await run.session.authorize({ serverUrl, authorizationCode: code })).toBe('AUTHORIZED')
+      expect(await run.session.provider.tokens()).toBeTruthy()
     } finally {
       await authServer.close()
     }
