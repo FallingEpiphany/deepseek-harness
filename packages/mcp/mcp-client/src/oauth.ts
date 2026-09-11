@@ -213,7 +213,7 @@ export async function writeGrantPayload(
     await credentials.deleteRecord(key)
     return
   }
-  await credentials.modifyRecord(key, async () => ({ kind: 'grant', payload }))
+  await credentials.modifyRecord(key, () => Promise.resolve({ kind: 'grant' as const, payload }))
 }
 
 /** Narrow a stored payload to the verifier shape, rejecting anything else. */
@@ -257,6 +257,12 @@ export interface OAuthSession {
   acceptCallback(callback: AuthorizationCallback): Promise<string>
   /** Whether an authorization flow is currently waiting for a redirect. */
   readonly awaitingUser: boolean
+  /**
+   * The state the started flow expects on its redirect, read from the record
+   * that holds the PKCE verifier. Absent when no flow is waiting, which is what
+   * tells a listener there is nothing to receive.
+   */
+  pendingState(): Promise<string | undefined>
   /** Remove every record this server owns, leaving no stored grant behind. */
   forget(): Promise<void>
 }
@@ -296,7 +302,7 @@ export function createOAuthSession(options: {
         ...config.scopes.length === 0 ? {} : { scope: config.scopes.join(' ') },
       }
     },
-    async state() {
+    state() {
       // The state is generated here rather than left to the SDK so the
       // redirect can be judged against the flow this plugin started.
       const state = randomUUID()
@@ -360,6 +366,10 @@ export function createOAuthSession(options: {
     provider,
     get awaitingUser() {
       return awaitingUser
+    },
+    async pendingState() {
+      const stored = asStoredVerifier(await readGrantPayload(credentials, records.verifier))
+      return stored?.state
     },
     async authorize({ serverUrl, authorizationCode }) {
       const result = await auth(provider, {

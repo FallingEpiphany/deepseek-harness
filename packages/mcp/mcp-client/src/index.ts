@@ -18,9 +18,11 @@ import z from '@deepseek-ai/schemastery'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { RECONNECT_DEFAULTS, resolveReconnectPolicy, startConnection } from './connection.ts'
-import type { ReconnectConfig } from './connection.ts'
+import type { ConnectionHandle, ReconnectConfig } from './connection.ts'
 import { createOAuthSession, requireCredentials, resolveOAuthConfig } from './oauth.ts'
-import type { OAuthConfig, OAuthSession } from './oauth.ts'
+import type { OAuthConfig, OAuthSession, ResolvedOAuthConfig } from './oauth.ts'
+import { startRedirectListener } from './oauth-redirect.ts'
+import type { RedirectListener } from './oauth-redirect.ts'
 // Side-effect type import: declaration-merges `ctx.tools` onto Context.
 import type {} from '@deepseek-ai/dsh-tools'
 
@@ -191,27 +193,94 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     return () => void names.delete(config.serverName)
   }, 'mcp-client.serverName')
 
+  const label = `mcp-client(${config.serverName})`
+
   // OAuth state is resolved before any effect registers, so an unusable
   // setting (or a composition with no credential store to hold a grant) fails
   // THIS instance at load rather than at the first 401.
-  const oauth: OAuthSession | undefined = config.transport === 'streamable-http' && config.oauth !== undefined
-    ? createOAuthSession({
-      credentials: requireCredentials(ctx, `mcp-client(${config.serverName}): oauth`),
+  const resolvedOAuth: ResolvedOAuthConfig | undefined = config.transport === 'streamable-http' && config.oauth !== undefined
+    ? resolveOAuthConfig(config.oauth, config.serverName, `${label}: oauth`)
+    : undefined
+
+  // One in-flight authorization at a time, owned by this plugin instance and
+  // released on unloading: the SDK hands over the authorization URL and stops,
+  // so nothing else receives the redirect.
+  let redirect: RedirectListener | undefined
+  ctx.effect(() => () => {
+    const listener = redirect
+    redirect = undefined
+    void listener?.dispose()
+  }, 'mcp-client.redirect')
+
+  /**
+   * Receive the redirect for a flow the SDK just started, exchange its code,
+   * and reconnect with the grant that results.
+   *
+   * @param authorizationUrl - The URL the user must open.
+   * @param session - The OAuth state for this server.
+   * @param resolved - The resolved configuration, which carries the redirect URI.
+   */
+  const completeAuthorization = async (
+    authorizationUrl: URL,
+    session: OAuthSession,
+    resolved: ResolvedOAuthConfig,
+  ): Promise<void> => {
+    // Only a Streamable HTTP server carries the URL an authorization is for.
+    if (config.transport !== 'streamable-http') return
+    const state = await session.pendingState()
+    if (state === undefined || resolved.redirectUrl === undefined || resolved.redirectPort === undefined) {
+      // A server with no redirect URI cannot receive one: the URL is the whole
+      // instruction, and only a surface that can render it can act on it.
+      ctx.logger.warn(`${label}: authorization required — open ${authorizationUrl.href}`)
+      return
+    }
+    // The listener binds before the URL is reported, so opening it immediately
+    // cannot race a redirect that has nowhere to land.
+    const listener = await startRedirectListener({
+      port: resolved.redirectPort,
+      path: resolved.redirectPath,
+      expectedState: state,
+      timeoutMs: resolved.authorizationTimeoutMs,
+    })
+    redirect = listener
+    ctx.logger.warn(`${label}: authorization required — open ${authorizationUrl.href} (waiting on ${resolved.redirectUrl})`)
+    try {
+      const outcome = await listener.settled
+      if (outcome.kind !== 'code') {
+        ctx.logger.warn(`${label}: authorization not completed (${outcome.kind})`)
+        return
+      }
+      const code = await session.acceptCallback({ code: outcome.code, state: outcome.state })
+      const result = await session.authorize({ serverUrl: config.url, authorizationCode: code })
+      ctx.logger.info(`${label}: authorization ${result.toLowerCase()}`)
+      if (result === 'AUTHORIZED') connection.reconnect()
+    } finally {
+      redirect = undefined
+      await listener.dispose()
+    }
+  }
+
+  let session: OAuthSession | undefined
+  if (resolvedOAuth !== undefined) {
+    session = createOAuthSession({
+      credentials: requireCredentials(ctx, `${label}: oauth`),
       serverName: config.serverName,
-      config: resolveOAuthConfig(config.oauth, config.serverName, `mcp-client(${config.serverName}): oauth`),
+      config: resolvedOAuth,
       presentAuthorization: (authorizationUrl) => {
-        // The URL is the whole instruction a user needs, and it is the only
-        // thing this plugin can do with it on its own: a surface that can open
-        // or render it consumes the URL, not this plugin.
-        ctx.logger.warn(`${config.serverName}: authorization required — open ${authorizationUrl.href}`)
+        // The SDK does not await this: the flow finishes later, when the user
+        // returns, so the outcome is reported here rather than through connect.
+        if (session === undefined) return
+        void completeAuthorization(authorizationUrl, session, resolvedOAuth).catch((error: unknown) => {
+          ctx.logger.error(`${label}: authorization flow failed: ${String(error)}`)
+        })
       },
     })
-    : undefined
+  }
 
   // The supervisor owns the client/transport generations, the reconnect
   // loop, and the live tool registrations; disposal stops reconnection,
   // quiesces in-flight work, and unregisters the current generation.
-  const connection = startConnection(ctx, config, reconnect, oauth)
+  const connection: ConnectionHandle = startConnection(ctx, config, reconnect, session)
 
   ctx.effect(() => {
     return () => connection.dispose()
