@@ -71,7 +71,7 @@ describe('ui-settings-plugins apply', () => {
 
   it('declares the services it uses', () => {
     expect(inject).toEqual([
-      'slots', 'locale', 'remote', 'remote.credentials', 'remote.session', 'settingsScope',
+      'slots', 'locale', 'remote', 'remote.credentials', 'remote.settings', 'remote.session', 'settingsScope',
     ])
   })
 
@@ -117,7 +117,7 @@ describe('ui-settings-plugins apply', () => {
 
     const tab = slots.entries('settings.plugins.tab')[0]!
     const tabFace = (tab.inject as unknown as () => ConfigurablePluginsTabFace)()
-    expect(Object.keys(tabFace.hooks)).toEqual(['configurablePlugins'])
+    expect(Object.keys(tabFace.hooks)).toEqual(['configurablePlugins', 'authorizations'])
     for (const entry of slots.entries('settings.plugin.item')) {
       const face = (entry as { inject?: () => unknown }).inject?.() as { hooks: Record<string, unknown> }
       // Each card injects exactly one snapshot store plus its own actions.

@@ -413,7 +413,7 @@ export class AuthorizationService extends Service {
         // A withdrawn attempt and a declined prompt are outcomes, not
         // failures: the human said no, or closed the page. Anything else is
         // the flow failing and belongs to the caller, cause chain intact.
-        if (signal.aborted || observed.declined) return { status: 'cancelled' }
+        if (signal.aborted || observed.declined || error instanceof AuthorizationDeclinedError) return { status: 'cancelled' }
         throw error
       }
     } finally {

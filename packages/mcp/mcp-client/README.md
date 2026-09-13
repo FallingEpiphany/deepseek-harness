@@ -124,7 +124,7 @@ A server that authenticates through the MCP authorization flow takes `oauth` ins
 Three facts govern the flow:
 
 - **The grant lives in the credential store, not in configuration.** Registration, tokens, the PKCE verifier, and discovery state are records under `mcp-client/<serverName>`, so one server can never read another's grant and a rotated token takes effect on the next request.
-- **Authorization is not an outage.** A server that needs a login the user has not completed stops the reconnect loop and reports the authorization URL, because no amount of backoff changes that state. Every other failure — a generic 500 included — keeps retrying on the normal schedule.
+- **Authorization is not an outage.** A server that needs a login the user has not completed stops the reconnect loop and directs the user to Plugin configuration → Authorization, because no amount of backoff changes that state. Every other failure — a generic 500 included — keeps retrying on the normal schedule.
 - **A refusal is a refusal.** The redirect's `state` is compared against the flow that started it before its code is used, so a redirect belonging to a different request is discarded rather than exchanged.
 
 OAuth needs a credential provider in the composition. The base composition loads the local store; a composition without one refuses to load such a server instead of connecting unauthenticated.
@@ -251,3 +251,5 @@ This Dev Note is working context for maintainers: open design questions and dire
 - The pinned MCP SDK is still evolving; a breaking upstream change requires updating the bridge.
 
 </details>
+
+MCP OAuth registers a flow with `ctx.authorization` under its token record key. Open **Settings → Plugins → Plugin configuration → Authorization** and choose the MCP entry. The shared service confirms the new credential commit and manages cancellation; the plugin binds the callback before notifying the initiating page. Saved grants remain available after restarting with the same credential provider.

@@ -1,3 +1,4 @@
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 /**
  * Plugins settings surface, browser half — one section whose feature-owned
  * tabs include configurable Host plugin cards and read-only inventory.
@@ -35,6 +36,7 @@ import {
 } from './subagent-model-selection-card-controller.ts'
 import { WEB_SEARCH_NS, WebSearchCardController } from './web-search-card-controller.ts'
 import { en, zh } from './locales.ts'
+import { AuthorizationController } from './authorization-controller.ts'
 
 export type { PluginsSettingsSectionInjected, PluginsSettingsSectionProps } from './PluginsSettingsSection.tsx'
 export type { ConfigurablePluginsTabProps } from './ConfigurablePluginsTab.tsx'
@@ -54,7 +56,7 @@ const NS = 'settings.plugins'
 
 /** Required services (cordis fiber inject). */
 export const inject = [
-  'slots', 'locale', 'remote', 'remote.credentials', 'remote.session', 'settingsScope',
+  'slots', 'locale', 'remote', 'remote.credentials', 'remote.settings', 'remote.session', 'settingsScope',
 ]
 
 /**
@@ -62,6 +64,23 @@ export const inject = [
  * @param ctx - the browser plugin context.
  */
 export function apply(ctx: ClientContext): void {
+  const authorizationOwner = randomUUID()
+  const mcp = new AuthorizationController({
+    async authorizations() {
+      const result = await ctx.remote.settings.authorizationFlows(authorizationOwner)
+      if (!result.ok) throw new Error(result.error.message)
+      return result.value
+    },
+    async beginAuthorization(name, method) {
+      const result = await ctx.remote.settings.beginAuthorization(authorizationOwner, name, method)
+      if (!result.ok) throw new Error(result.error.message)
+    },
+    async respondAuthorization(name, answer) {
+      const result = await ctx.remote.settings.respondAuthorization(authorizationOwner, name, answer)
+      if (!result.ok) throw new Error(result.error.message)
+    },
+  })
+  ctx.effect(() => () => { mcp.dispose() }, 'ui-settings-plugins: MCP state')
   const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-plugins: section dictionaries')
 
@@ -160,7 +179,11 @@ export function apply(ctx: ClientContext): void {
     order: 0,
     label: () => t('configurableTab'),
     locale: NS,
-    inject: () => configurable.inject(),
+    inject: () => {
+      const configurableFace = configurable.inject()
+      const mcpFace = mcp.inject()
+      return { ...configurableFace, ...mcpFace, hooks: { ...configurableFace.hooks, ...mcpFace.hooks } }
+    },
     children: { 'settings.plugin.item': { kind: 'keyed', scope: 'root' } },
   }, ConfigurablePluginsTab))
 

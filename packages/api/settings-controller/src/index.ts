@@ -25,6 +25,8 @@ import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typer
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import { CredentialsController } from './credentials.ts'
+import { AuthorizationSurface } from './authorization.ts'
+import type { AuthorizationView } from './types.ts'
 import type { AgentPresetDirectoryOpenValue, SettingsDocumentOpenValue } from './types.ts'
 
 export { CredentialsController } from './credentials.ts'
@@ -86,6 +88,36 @@ declare module '@deepseek-ai/cordis' {
  * `settings/conflict` or `settings/rejected` with the service's message.
  */
 export class SettingsController extends TypertRemoteService {
+  private readonly authorizationSurface: AuthorizationSurface
+
+  /** List shared authorization flows for this browser surface.
+   * @param owner - Opaque identifier held by the initiating browser page.
+   * @returns Redacted registered flows visible to this page.
+   */
+  @Remote
+  authorizationFlows(owner: string): Promise<AuthorizationView[]> {
+    return this.authorizationSurface.list(owner)
+  }
+
+  /** Begin a method registered with the shared authorization service.
+   * @param owner - Initiating page identifier.
+   * @param name - Registered credential key.
+   * @param method - Registered method identifier.
+   */
+  @Remote
+  beginAuthorization(owner: string, name: string, method: string): void {
+    this.authorizationSurface.begin(owner, name, method)
+  }
+
+  /** Answer a shared-flow prompt, or cancel with a null answer.
+   * @param owner - Initiating page identifier.
+   * @param name - Registered credential key.
+   * @param answer - Prompt response, or null to cancel.
+   */
+  @Remote
+  respondAuthorization(owner: string, name: string, answer: string | null): void {
+    this.authorizationSurface.respond(owner, name, answer)
+  }
   static Config: Schema<Config> = Schema.object({ nativeOpen: Schema.boolean() })
 
   private readonly openPath: (path: string, signal: AbortSignal) => Promise<void>
@@ -105,6 +137,8 @@ export class SettingsController extends TypertRemoteService {
     this.canOpenPath = internals.canOpenPath
       ?? (() => config.nativeOpen ?? (internals.openPath !== undefined || canOpenNativePath()))
     ctx.plugin(CredentialsController)
+    this.authorizationSurface = new AuthorizationSurface(ctx)
+    ctx.effect(() => () => { this.authorizationSurface.dispose() }, 'settings.authorization-surface')
   }
 
   /**

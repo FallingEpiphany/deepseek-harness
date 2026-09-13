@@ -2085,6 +2085,22 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Host service backing the generated `ctx.remote.settings` namespace. Every remote read uses `redactSecrets: true`, so a `role(\'secret\')` field cannot ride a response. Writes expose the settings service\'s merge, replacement, and path-addressed operations, and classify every provider refusal as `settings/conflict` or `settings/rejected` with the service\'s message.',
     methods: [
       {
+        signature: '@Remote authorizationFlows(owner: string): Promise<AuthorizationView[]>',
+        description: 'List shared authorization flows for this browser surface.',
+        parameters: [{ name: 'owner', description: 'Opaque identifier held by the initiating browser page.' }],
+        returns: 'Redacted registered flows visible to this page.',
+      },
+      {
+        signature: '@Remote beginAuthorization(owner: string, name: string, method: string): void',
+        description: 'Begin a method registered with the shared authorization service.',
+        parameters: [{ name: 'owner', description: 'Initiating page identifier.' }, { name: 'name', description: 'Registered credential key.' }, { name: 'method', description: 'Registered method identifier.' }],
+      },
+      {
+        signature: '@Remote respondAuthorization(owner: string, name: string, answer: string | null): void',
+        description: 'Answer a shared-flow prompt, or cancel with a null answer.',
+        parameters: [{ name: 'owner', description: 'Initiating page identifier.' }, { name: 'name', description: 'Registered credential key.' }, { name: 'answer', description: 'Prompt response, or null to cancel.' }],
+      },
+      {
         signature: '@Remote describe(): SettingsDescribeValue',
         description: 'Describe every registered namespace for a configuration page: redacted layered values plus the serialized schema the page renders its form from.',
         parameters: [],

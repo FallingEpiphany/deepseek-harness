@@ -283,6 +283,26 @@ Source: [`packages/settings/settings/src/index.ts`](../../packages/settings/sett
 Host service backing the generated `ctx.remote.settings` namespace. Every remote read uses `redactSecrets: true`, so a `role('secret')` field cannot ride a response. Writes expose the settings service's merge, replacement, and path-addressed operations, and classify every provider refusal as `settings/conflict` or `settings/rejected` with the service's message.
 
 ```ts cordis-catalog
+/** List shared authorization flows for this browser surface.
+ * @param owner - Opaque identifier held by the initiating browser page.
+ * @returns Redacted registered flows visible to this page.
+ */
+@Remote authorizationFlows(owner: string): Promise<AuthorizationView[]>
+
+/** Begin a method registered with the shared authorization service.
+ * @param owner - Initiating page identifier.
+ * @param name - Registered credential key.
+ * @param method - Registered method identifier.
+ */
+@Remote beginAuthorization(owner: string, name: string, method: string): void
+
+/** Answer a shared-flow prompt, or cancel with a null answer.
+ * @param owner - Initiating page identifier.
+ * @param name - Registered credential key.
+ * @param answer - Prompt response, or null to cancel.
+ */
+@Remote respondAuthorization(owner: string, name: string, answer: string | null): void
+
 /**
  * Describe every registered namespace for a configuration page: redacted
  * layered values plus the serialized schema the page renders its form from.

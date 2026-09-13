@@ -689,6 +689,7 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
 /** Project types deliberately documented outside the subsystems catalog. */
 export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   McpConnection: 'authenticated resource and prompt read handle is owned by packages/mcp/mcp-client/README.md and src/connections.ts',
+  AuthorizationView: 'redacted browser authorization projection is owned by packages/api/settings-controller/README.md and src/types.ts',
   z: 'schemastery schema constructor is owned by vendor/schemastery (vendored upstream)',
   BeginCommandRequest: 'event-local request contract is owned by packages/client/ui-input-trigger/src/types.ts',
   InsertReferenceRequest: 'event-local request contract is owned by packages/client/ui-input-trigger/src/types.ts',

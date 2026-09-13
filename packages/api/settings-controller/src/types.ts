@@ -37,3 +37,17 @@ export interface SettingsDocumentOpenValue {
 export type AgentPresetDirectoryOpenValue =
   | { readonly opened: true }
   | { readonly opened: false; readonly path: string }
+
+/** Redacted state of one flow as seen by its requesting page. */
+export interface AuthorizationView {
+  name: string
+  label: string
+  state: string
+  oauth: boolean
+  authorizationUrl: string | null
+  message: string | null
+  code: string | null
+  owned: boolean
+  methods: Array<{ id: string; label: string }>
+  prompt: { kind: string; message: string; options: Array<{ id: string; label: string }> } | null
+}

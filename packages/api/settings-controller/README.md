@@ -23,6 +23,8 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
+The **Authorization** card in Plugin configuration lists flows registered with `ctx.authorization`. `settings.authorizationFlows`, `settings.beginAuthorization`, and `settings.respondAuthorization` adapt browser interactions only; the shared service owns concurrency, cancellation, and credential commit confirmation. MCP registers under `mcp-client/<serverName>` and notifies its URL only after binding the callback port. The page renders methods, codes, and prompts, with interaction details restricted to the initiating page and no tokens returned. Record presence reads as **Credential saved**, not as a connected transport.
+
 Mount this package as a Loader entry in a profile that serves browser configuration. The entry registers both namespaces independently of their providers so a missing provider produces a named configuration error at invocation. Its generated descriptors enter the strict Typert registry, while the settings and credential Definitions remain plain Cordis Services with no wire obligations of their own.
 
 `describe(refs)` answers one map keyed by the requested names, so a settings page describing every reference its rows carry settles those rows together. It accepts at most 64 names per call, reports an invalid name or empty write value as `bad-request`, and copies each answer field by field — a provider returning more than `CredentialInfo` declares cannot widen what crosses. Valid `set(ref, value)` and `unset(ref)` calls report a provider refusal as `credential-rejected`, carrying the provider's message with only the reference in its details. Secret values cross in this direction only: no method here returns one.

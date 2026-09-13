@@ -29,6 +29,8 @@ kind: "package-reference"
 
 ### 这里会出现什么
 
+插件配置页的**授权**卡片列出 `ctx.authorization` 注册的流程。`settings.authorizationFlows`、`settings.beginAuthorization` 和 `settings.respondAuthorization` 只负责浏览器交互适配；统一服务管理并发、取消和凭据提交确认。MCP 使用 `mcp-client/<serverName>` 注册流程，绑定回调端口后才通过通知提供链接。页面支持方法选择、验证码和输入提示；提示只发给发起页面，令牌不会返回浏览器。凭据存在显示为「凭据已保存」，不冒充当前传输已连接。
+
 标签页读取 Host 服务了哪些 settings 命名空间，并为每个命名空间派发一个 slot 键，因此渲染出来的是两份账本的交集：存活 Host 插件注册的命名空间，以及注册在这些键上的卡片。被服务却无人认领的命名空间什么都不渲染；命名空间未被本部署服务的卡片根本不会被派发。空态文案要等 Host 的第一次答复，因此一次尚未答复的读取绝不会被读成「本部署没有可配置的插件」。
 
 ### 编辑与保存

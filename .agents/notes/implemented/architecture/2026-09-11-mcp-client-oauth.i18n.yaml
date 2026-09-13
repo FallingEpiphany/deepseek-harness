@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-11-mcp-client-oauth.md
-2026-09-11-mcp-client-oauth.md: bfd61f65f8788b54e68c290dccb2b07bb859110e
-2026-09-11-mcp-client-oauth.zh.md: c2483f7ec4b9b129d03d54a55f60faedd3248a0b
+2026-09-11-mcp-client-oauth.md: cd524446c467644250b239b3f90c7c47f7dc1ca4
+2026-09-11-mcp-client-oauth.zh.md: 5e9a95fe5f009480a920ba56a33f72a82ffa7813

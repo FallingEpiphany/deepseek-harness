@@ -28,7 +28,7 @@ The plugin owns the flow, the credential records hold the grant, and the supervi
 
 **Static headers only, with documentation telling users to mint a long-lived token.** Cheapest by far and already worked, but it is the practice the MCP authorization flow exists to replace: no rotation, no revocation, and a credential in configuration that the credential seam was built to keep out of it.
 
-**A `ctx.authorization` flow instead of a listener this plugin owns.** The sanctioned surface for asking a human, with `llm-pi-ai` as a working precedent, and it would have given every configuration UI a login button for free. Rejected because the redirect URI is the part an authorization server validates exactly: a dynamically registered client must name the URI it will use before a flow starts, so the listener has to exist and be bound to a configured port regardless of who drives the conversation, and a flow registered per server would still need that listener behind it. Registering a flow on top of this is additive and remains open; the seam's own contract — one attempt per key, a commit confirmed through `ctx.credentials` — is already satisfied by how the records are written.
+**A separate MCP login lifecycle.** Replaced by a flow registered with the existing authorization service. MCP retains protocol and callback ownership; the shared service owns the conversation and commit confirmation.
 
 **Tokens in a settings namespace.** Settings hold literal values in a plain document that is synced and rendered; the credential store is the half built for secrets, and `llm-pi-ai` had already established that a grant belongs there.
 
@@ -37,6 +37,8 @@ The plugin owns the flow, the credential records hold the grant, and the supervi
 **Treating a 401 as an ordinary outage.** It would have needed no new supervisor state, and it is exactly the failure the retry budget cannot fix. The budget exists to ride out a server that is down, not to wait for a person.
 
 ## Consequences
+
+The **Authorization** card in Plugin configuration lists flows registered with `ctx.authorization`. `settings.authorizationFlows`, `settings.beginAuthorization`, and `settings.respondAuthorization` adapt browser interactions only; the shared service owns concurrency, cancellation, and credential commit confirmation. MCP registers under `mcp-client/<serverName>` and notifies its URL only after binding the callback port. The page renders methods, codes, and prompts, with interaction details restricted to the initiating page and no tokens returned. Record presence reads as **Credential saved**, not as a connected transport.
 
 Companion resource and prompt readers use the host's `mcpConnections` directory instead of copying tokens or owning another transport. The directory follows the same Agent scope as tool registrations and removes a connection on disposal. Every read resolves the current supervised generation, preserving OAuth refresh and reconnect ownership. The credential provider must be declared as an entry dependency for OAuth compositions; a persistent provider retains the grant across host restarts.
 

@@ -66,7 +66,10 @@ function connectionFailure(error: unknown): string {
       codes.add(value.code)
     }
     pending.push(value.cause)
-    if (value instanceof AggregateError) pending.push(...value.errors.slice(0, 16))
+    if (value instanceof AggregateError) {
+      const errors: unknown[] = value.errors
+      pending.push(...errors.slice(0, 16))
+    }
   }
   return `${String(error)}${codes.size === 0 ? '' : ` [${[...codes].join(', ')}]`}`
 }

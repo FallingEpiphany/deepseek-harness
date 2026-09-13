@@ -2,6 +2,8 @@
 
 /** Locale keys these surfaces render. */
 export type PluginsSettingsLocaleKey =
+  | 'mcpTitle' | 'mcpDescription' | 'mcpFailed' | 'mcpEmpty' | 'mcpConnected' | 'mcpConnecting' | 'mcpDisconnected' | 'mcpOpenAuthorization' | 'mcpPreparing' | 'mcpAuthorize' | 'mcpReconnect'
+  | 'authCancel' | 'authCancelled' | 'authFailed' | 'authSubmit'
   | 'nav' | 'title' | 'intro' | 'tabs' | 'configurableTab' | 'empty'
   | 'overridden' | 'reset' | 'readOnly' | 'expand' | 'collapse'
   | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed' | 'invalidNumber'
@@ -20,6 +22,18 @@ export type PluginsSettingsLocaleKey =
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
+  mcpTitle: 'Authorization',
+  mcpDescription: 'Connect services and manage browser authorization. Credentials stay in the host.',
+  mcpFailed: 'Could not read or update authorization. Try again shortly.',
+  mcpEmpty: 'No authorization flows are registered.',
+  mcpConnected: 'Credential saved',
+  mcpConnecting: 'Authorizing…',
+  mcpDisconnected: 'Not authorized',
+  mcpOpenAuthorization: 'Open authorization page',
+  mcpPreparing: 'Preparing…',
+  mcpAuthorize: 'Sign in / retry',
+  mcpReconnect: 'Reconnect',
+  authCancel: 'Cancel', authCancelled: 'Cancelled', authFailed: 'Authorization failed', authSubmit: 'Continue',
   nav: 'Plugins',
   title: 'Plugins',
   intro: 'Configure and inspect the plugins installed in this deployment.',
@@ -76,6 +90,18 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
 
 /** Simplified Chinese copy. */
 export const zh: Record<PluginsSettingsLocaleKey, string> = {
+  mcpTitle: '授权',
+  mcpDescription: '连接服务并管理浏览器授权。凭证由宿主保存。',
+  mcpFailed: '读取或更新授权状态失败，请稍后重试。',
+  mcpEmpty: '尚未注册授权流程。',
+  mcpConnected: '凭据已保存',
+  mcpConnecting: '正在授权…',
+  mcpDisconnected: '未授权',
+  mcpOpenAuthorization: '打开授权页面',
+  mcpPreparing: '正在准备…',
+  mcpAuthorize: '登录 / 重试',
+  mcpReconnect: '重新连接',
+  authCancel: '取消', authCancelled: '已取消', authFailed: '授权失败', authSubmit: '继续',
   nav: '插件',
   title: '插件',
   intro: '配置和查看本部署已安装的插件。',

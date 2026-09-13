@@ -12,6 +12,8 @@ import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@d
 import type {} from './slot-contract.ts'
 import type { ConfigurablePluginsTabFace } from './tab-store.ts'
 import css from './PluginsSettingsSection.module.css'
+import { AuthorizationCard } from './AuthorizationCard.tsx'
+import type { AuthorizationFace } from './authorization-controller.ts'
 
 /** Props the renderer binds for the configurable tab. */
 export type ConfigurablePluginsTabProps =
@@ -19,6 +21,7 @@ export type ConfigurablePluginsTabProps =
   & PropsLocale<'settings.plugins'>
   & PropsRenderSlots<'settings.plugin.item'>
   & InjectFace<ConfigurablePluginsTabFace>
+  & InjectFace<AuthorizationFace>
 
 /**
  * Render cards registered by plugins that expose editable settings.
@@ -30,14 +33,14 @@ export function ConfigurablePluginsTab(props: ConfigurablePluginsTabProps) {
   const { loaded, namespaces } = props.useConfigurablePlugins(snapshot => snapshot)
   if (namespaces.length > 0) {
     return (
-      <ul className={css.cards}>
+      <><AuthorizationCard {...props} /><ul className={css.cards}>
         {namespaces.map(ns => (
           // One dispatch per namespace, so the list identity is the namespace
           // rather than a position that shifts as cards arrive.
           <Fragment key={ns}>{renderSlot('settings.plugin.item', {}, { entryKey: ns })}</Fragment>
         ))}
-      </ul>
+      </ul></>
     )
   }
-  return loaded ? <p className={css.empty}>{t('empty')}</p> : null
+  return <><AuthorizationCard {...props} />{loaded ? <p className={css.empty}>{t('empty')}</p> : null}</>
 }

@@ -61,6 +61,9 @@ function renderConfigurable(namespaces: string[], cards: Record<string, string> 
   const props = {
     t,
     useConfigurablePlugins: bindSnapshotSelector(store),
+    useAuthorizations: (selector: (state: unknown) => unknown) => selector({ servers: [], loaded: false, failed: false, busy: null }),
+    refreshAuthorizations: vi.fn(),
+    beginAuthorization: vi.fn(),
     renderSlot: (_name: string, _owner: object, opts?: { entryKey?: string }) => {
       const card = opts?.entryKey === undefined ? undefined : cards[opts.entryKey]
       return card === undefined ? null : <li>{card}</li>

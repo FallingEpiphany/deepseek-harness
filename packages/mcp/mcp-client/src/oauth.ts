@@ -203,17 +203,22 @@ export async function readGrantPayload(credentials: CredentialProvider, key: Cre
  * @param credentials - The credentials service.
  * @param key - The record address.
  * @param payload - The payload to store, or undefined to remove the record.
+ * @param signal - Prevent a cancelled authorization from committing a late result.
  */
 export async function writeGrantPayload(
   credentials: CredentialProvider,
   key: CredentialKey,
   payload: unknown,
+  signal?: AbortSignal,
 ): Promise<void> {
   if (payload === undefined) {
     await credentials.deleteRecord(key)
     return
   }
-  await credentials.modifyRecord(key, () => Promise.resolve({ kind: 'grant' as const, payload }))
+  await credentials.modifyRecord(key, () => {
+    signal?.throwIfAborted()
+    return Promise.resolve({ kind: 'grant' as const, payload })
+  })
 }
 
 /** Narrow a stored payload to the verifier shape, rejecting anything else. */
@@ -278,6 +283,7 @@ export function createOAuthSession(options: {
   serverName: string
   config: ResolvedOAuthConfig
   presentAuthorization: (url: URL) => void
+  signal?: AbortSignal
 }): OAuthSession {
   const { credentials, config } = options
   const records = serverRecords(options.serverName)
@@ -314,7 +320,7 @@ export function createOAuthSession(options: {
       return typeof stored === 'object' && stored !== null ? stored as OAuthClientInformationMixed : undefined
     },
     async saveClientInformation(clientInformation: OAuthClientInformationMixed) {
-      await writeGrantPayload(credentials, records.client, clientInformation)
+      await writeGrantPayload(credentials, records.client, clientInformation, options.signal)
     },
     async tokens(): Promise<OAuthTokens | undefined> {
       // The SDK's own schema reads the stored document back, so a payload
@@ -326,7 +332,7 @@ export function createOAuthSession(options: {
     async saveTokens(tokens: OAuthTokens) {
       // Stored verbatim: the same schema validates it on the way out, so no
       // field of the token document is copied by hand here.
-      await writeGrantPayload(credentials, records.tokens, tokens)
+      await writeGrantPayload(credentials, records.tokens, tokens, options.signal)
     },
     redirectToAuthorization(authorizationUrl: URL) {
       awaitingUser = true
@@ -338,7 +344,7 @@ export function createOAuthSession(options: {
       await writeGrantPayload(credentials, records.verifier, {
         codeVerifier,
         state: expectedState ?? '',
-      } satisfies StoredVerifier)
+      } satisfies StoredVerifier, options.signal)
     },
     async codeVerifier(): Promise<string> {
       const stored = asStoredVerifier(await readGrantPayload(credentials, records.verifier))
@@ -348,7 +354,7 @@ export function createOAuthSession(options: {
       return stored.codeVerifier
     },
     async saveDiscoveryState(state: OAuthDiscoveryState) {
-      await writeGrantPayload(credentials, records.discovery, state)
+      await writeGrantPayload(credentials, records.discovery, state, options.signal)
     },
     async discoveryState(): Promise<OAuthDiscoveryState | undefined> {
       const stored = await readGrantPayload(credentials, records.discovery)
@@ -372,6 +378,7 @@ export function createOAuthSession(options: {
       return stored?.state
     },
     async authorize({ serverUrl, authorizationCode }) {
+      options.signal?.throwIfAborted()
       const result = await auth(provider, {
         serverUrl,
         ...authorizationCode === undefined ? {} : { authorizationCode },

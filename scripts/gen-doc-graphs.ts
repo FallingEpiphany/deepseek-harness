@@ -99,6 +99,14 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'mcpConnections',
+    pkg: 'mcp-client',
+    title: 'Authenticated MCP connection directory',
+    mode: 'core',
+    consumers: [],
+    note: 'Companion plugins resolve authenticated resources and prompts in their existing tool scope without copying credentials.',
+  },
+  {
     key: 'attachments',
     pkg: 'attachment',
     title: 'Durable binary attachment storage',

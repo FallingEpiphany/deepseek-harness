@@ -23,6 +23,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+插件配置页的**授权**卡片列出 `ctx.authorization` 注册的流程。`settings.authorizationFlows`、`settings.beginAuthorization` 和 `settings.respondAuthorization` 只负责浏览器交互适配；统一服务管理并发、取消和凭据提交确认。MCP 使用 `mcp-client/<serverName>` 注册流程，绑定回调端口后才通过通知提供链接。页面支持方法选择、验证码和输入提示；提示只发给发起页面，令牌不会返回浏览器。凭据存在显示为「凭据已保存」，不冒充当前传输已连接。
+
 请把本包作为 Loader entry 挂载到提供浏览器配置的 profile 中。本 entry 不依赖提供方是否存在而注册两个 namespace，因此缺少提供方会在调用时产生具名配置错误。它生成的 descriptor 进入严格 Typert 注册表，而 settings 与凭据 Definition 仍是普通 Cordis 服务，自身不承担任何 wire 义务。
 
 `describe(refs)` 以请求的名字为键返回一份 map，因此设置页描述其各行携带的全部引用时，这些行会一起落定。单次调用最多接受 64 个名字，无效名字或空写入值报告为 `bad-request`，并逐字段复制每个答案——提供方返回超出 `CredentialInfo` 声明的内容也无法扩大跨越 wire 的字段。有效的 `set(ref, value)` 与 `unset(ref)` 调用把提供方拒绝报告为 `credential-rejected`，携带提供方的消息，details 中只有该引用。机密值只在这个方向跨越 wire：这里没有任何方法会返回它。

@@ -1,0 +1,7 @@
+.card { padding: 16px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; color: var(--dsw-alias-label-primary); }
+.card h3 { margin: 0 0 6px; font-size: 14px; }
+.card p { margin: 6px 0; font-size: 12px; color: var(--dsw-alias-label-tertiary); }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding-top: 12px; font-size: 13px; }
+.row strong { margin-right: auto; }
+.row button, .row a { padding: 6px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; background: transparent; color: var(--dsw-alias-label-primary); cursor: pointer; font: inherit; }
+.row button:disabled { opacity: .5; cursor: default; }
