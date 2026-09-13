@@ -24,10 +24,13 @@ import { createOAuthSession, requireCredentials, resolveOAuthConfig } from './oa
 import type { OAuthConfig, OAuthSession, ResolvedOAuthConfig } from './oauth.ts'
 import { startRedirectListener } from './oauth-redirect.ts'
 import type { RedirectListener } from './oauth-redirect.ts'
+import { McpConnections } from './connections.ts'
 // Side-effect type import: declaration-merges `ctx.tools` onto Context.
 import type {} from '@deepseek-ai/dsh-tools'
 
 export type { McpResult } from './tools.ts'
+export { McpConnections } from './connections.ts'
+export type { McpConnection, McpReadMethod } from './connections.ts'
 export type { ReconnectConfig, ResolvedReconnectPolicy } from './connection.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
@@ -48,6 +51,7 @@ const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
  * duplicates inside one Agent remain mutually exclusive.
  */
 const activeServerNames = new WeakMap<object, Set<string>>()
+const connectionRegistries = new WeakMap<object, Promise<unknown>>()
 
 // ---- Config ----
 
@@ -171,6 +175,19 @@ export const Config = z.union([
  * @returns startup readiness after connection and initial tool discovery settle.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
+  if (ctx.get('mcpConnections') === undefined) {
+    let pending = connectionRegistries.get(ctx.root)
+    if (pending === undefined) {
+      pending = Promise.resolve(ctx.root.plugin(McpConnections)).catch((error: unknown) => {
+        connectionRegistries.delete(ctx.root)
+        throw error
+      })
+      connectionRegistries.set(ctx.root, pending)
+    }
+    await pending
+  }
+  const connections = ctx.get('mcpConnections')
+  if (connections === undefined) throw new Error('mcp-client: shared connection directory failed to initialize')
   // Fail loud at load: reconnect misconfiguration (including programmatic
   // construction that bypassed Schemastery) rejects THIS instance before any
   // effect registers.
@@ -282,6 +299,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // loop, and the live tool registrations; disposal stops reconnection,
   // quiesces in-flight work, and unregisters the current generation.
   const connection: ConnectionHandle = startConnection(ctx, config, reconnect, session)
+  ctx.effect(() => connections.register(ctx, config.serverName, connection), 'mcp-client.shared-connection')
 
   ctx.effect(() => {
     return () => connection.dispose()

@@ -101,6 +101,7 @@ kind: "package-reference"
 ```yaml
 - id: mcp-remote
   name: '@deepseek-ai/dsh-mcp-client'
+  inject: [credentials]
   config:
     serverName: remote
     transport: streamable-http
@@ -216,6 +217,8 @@ OAuth 需要组合中存在凭据提供方。基础组合会加载本地存储�
 仅追加；新可见内容位于可复用请求前缀之后，不会使现有 KV-cache 条目失效。
 
 ## 已知限制与延期工作
+
+伴随插件可声明 `mcpConnections` 依赖，并在自身上下文中解析已配置的服务器。返回的 `request()` 通过受管理且已认证的连接读取资源与提示，`metadata()` 返回服务器元信息，不暴露令牌。Agent 私有连接彼此隔离，全局连接可被继承，卸载后注册消失。OAuth 配置行使用 `inject: [credentials]`，保证激活前凭证服务已就绪。重启时使用相同的持久凭证服务和 harness home，以保留授权。
 
 OAuth 等待用户同意时，即使设置 `failOnStartupError: true`，插件也保持活动；真实连接或工具发现失败仍会拒绝启动。连接诊断会附带 `ECONNREFUSED` 等底层传输错误码，但不输出底层请求详情。
 

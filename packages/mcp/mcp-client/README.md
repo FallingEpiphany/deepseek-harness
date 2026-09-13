@@ -102,6 +102,7 @@ A server that authenticates through the MCP authorization flow takes `oauth` ins
 ```yaml
 - id: mcp-remote
   name: '@deepseek-ai/dsh-mcp-client'
+  inject: [credentials]
   config:
     serverName: remote
     transport: streamable-http
@@ -216,6 +217,8 @@ Arguments, mapped text, and durable image references are retained until compacti
 Append-only; newly visible content follows the reusable request prefix and does not invalidate existing KV-cache entries.
 
 ## Known Limitations and Deferred Work
+
+Companion plugins can inject `mcpConnections` and resolve a configured server in their own context. The returned `request()` supports resource and prompt reads through the supervised, authenticated connection; `metadata()` returns server metadata. No token is exposed. Agent-local registrations are isolated, global registrations are inherited, and unloading removes the entry. Load OAuth entries with `inject: [credentials]` so the credential provider is ready before activation. Use the same persistent credentials provider and harness home across restarts to retain the grant.
 
 OAuth awaiting user consent keeps the plugin active even with `failOnStartupError: true`; that option still rejects actual connection and tool-discovery failures. Connection diagnostics include nested transport error codes, such as `ECONNREFUSED`, without printing nested request details.
 

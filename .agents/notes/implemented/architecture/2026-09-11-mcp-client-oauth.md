@@ -38,6 +38,8 @@ The plugin owns the flow, the credential records hold the grant, and the supervi
 
 ## Consequences
 
+Companion resource and prompt readers use the host's `mcpConnections` directory instead of copying tokens or owning another transport. The directory follows the same Agent scope as tool registrations and removes a connection on disposal. Every read resolves the current supervised generation, preserving OAuth refresh and reconnect ownership. The credential provider must be declared as an entry dependency for OAuth compositions; a persistent provider retains the grant across host restarts.
+
 Strict startup keeps a pending browser authorization alive instead of rolling back the plugin and its redirect listener. The pending state requires both an issued authorization request and the SDK's typed unauthorized result; unrelated failures remain fatal when configured. A plugin-entry test exercises SDK discovery, callback exchange, and supervisor reconnection together. Transport failures expose nested error codes without nested request details, so network diagnostics do not have to infer causes from `fetch failed` alone.
 
 A server that authenticates through the MCP authorization flow is reachable, and its grant is stored where every other obtained credential lives: rotating it takes effect on the next request, and one server's records are unreachable from another's.

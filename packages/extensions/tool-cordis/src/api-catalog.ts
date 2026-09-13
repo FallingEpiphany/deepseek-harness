@@ -1317,6 +1317,26 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'mcpConnections',
+    summary: 'Scoped connection directory owned by the host; unloading removes its entries.',
+    description: 'Scoped connection directory owned by the host; unloading removes its entries.',
+    methods: [
+      {
+        signature: 'register(owner: Context, name: string, connection: McpConnection): () => void',
+        description: 'Register a server in its existing tool scope; returns its removal effect.',
+        parameters: [{ name: 'owner', description: 'The MCP plugin context.' }, { name: 'name', description: 'Configured server namespace.' }, { name: 'connection', description: 'Authenticated operations for the supervised connection.' }],
+        returns: 'A disposer that removes this registration.',
+      },
+      {
+        signature: 'resolve(owner: Context, name: string): McpConnection',
+        description: 'Resolve a server visible to the calling plugin without crossing Agent scopes.',
+        parameters: [{ name: 'owner', description: 'The companion plugin context.' }, { name: 'name', description: 'Configured server namespace.' }],
+        returns: 'Its authenticated read interface.',
+        throws: ['Error if no server is registered in this scope or globally.'],
+      },
+    ],
+  },
+  {
     key: 'messageFeedback',
     summary: 'Session-log service; cold operations never construct a Session or Agent.',
     description: 'Session-log service; cold operations never construct a Session or Agent.',
@@ -4609,6 +4629,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ManualCompactAgentContext',
     declaration: 'export interface ManualCompactAgentContext extends CompactionAgentContext {\n    runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;\n}',
+  },
+  {
+    name: 'McpConnection',
+    declaration: 'export interface McpConnection {\n    request(method: McpReadMethod, params: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;\n    metadata(): Promise<unknown>;\n}',
+  },
+  {
+    name: 'McpReadMethod',
+    declaration: 'export type McpReadMethod = \'resources/read\' | \'resources/list\' | \'prompts/get\' | \'prompts/list\';',
   },
   {
     name: 'Message',

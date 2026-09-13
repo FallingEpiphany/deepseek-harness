@@ -475,6 +475,32 @@ type ObjectJsonSchema = JsonSchemaNode & { type: 'object' }
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxmcpconnections--mcpconnections"></a>
+
+### `ctx.mcpConnections` — `McpConnections`
+
+Scoped connection directory owned by the host; unloading removes its entries.
+
+```ts cordis-catalog
+/** Register a server in its existing tool scope; returns its removal effect.
+ * @param owner - The MCP plugin context.
+ * @param name - Configured server namespace.
+ * @param connection - Authenticated operations for the supervised connection.
+ * @returns A disposer that removes this registration.
+ */
+register(owner: Context, name: string, connection: McpConnection): () => void
+
+/** Resolve a server visible to the calling plugin without crossing Agent scopes.
+ * @param owner - The companion plugin context.
+ * @param name - Configured server namespace.
+ * @returns Its authenticated read interface.
+ * @throws Error if no server is registered in this scope or globally.
+ */
+resolve(owner: Context, name: string): McpConnection
+```
+
+Source: [`packages/mcp/mcp-client/src/connections.ts`](../../packages/mcp/mcp-client/src/connections.ts)
+
 <a id="ctxtools--toolruntime"></a>
 
 ### `ctx.tools` — `ToolRuntime`

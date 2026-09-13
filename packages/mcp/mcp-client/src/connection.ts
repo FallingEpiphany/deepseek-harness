@@ -25,6 +25,8 @@ import { syncTools } from './tools.ts'
 import type { ToolBridgeOptions, ToolDisposers } from './tools.ts'
 import type { Config } from './index.ts'
 import type { OAuthSession } from './oauth.ts'
+import type { McpConnection } from './connections.ts'
+import { ReadResourceResultSchema, ListResourcesResultSchema, GetPromptResultSchema, ListPromptsResultSchema } from '@modelcontextprotocol/sdk/types.js'
 
 /** Automatic reconnect policy for one MCP server connection. */
 export interface ReconnectConfig {
@@ -116,7 +118,7 @@ export interface ConnectionOutcome {
 }
 
 /** Handle for one plugin instance's supervised connection. */
-export interface ConnectionHandle {
+export interface ConnectionHandle extends McpConnection {
   /**
    * Settles when the first connection attempt completes (success or failure).
    * The supervisor enters its reconnect loop regardless; the caller decides
@@ -372,6 +374,24 @@ export function startConnection(
 
   return {
     ready,
+    async metadata() {
+      await settling
+      if (disposed || client === undefined || connectedAt === undefined) throw new Error(`${label}: connection unavailable; complete OAuth authorization first`)
+      const endpoint = config.transport === 'streamable-http' ? new URL(config.url) : undefined
+      return { endpoint: endpoint === undefined ? 'stdio' : endpoint.origin + endpoint.pathname, serverInfo: client.getServerVersion(), capabilities: client.getServerCapabilities(), instructions: client.getInstructions() }
+    },
+    async request(method, params, signal) {
+      await settling
+      if (disposed || client === undefined || connectedAt === undefined) throw new Error(`${label}: connection unavailable; complete OAuth authorization first`)
+      const options = { timeout: config.toolCallTimeoutMs, ...signal === undefined ? {} : { signal } }
+      const request = { method, params }
+      switch (method) {
+        case 'resources/read': return await client.request(request, ReadResourceResultSchema, options)
+        case 'resources/list': return await client.request(request, ListResourcesResultSchema, options)
+        case 'prompts/get': return await client.request(request, GetPromptResultSchema, options)
+        case 'prompts/list': return await client.request(request, ListPromptsResultSchema, options)
+      }
+    },
     reconnect(): void {
       if (disposed || client !== undefined) return
       if (reconnectTimer !== undefined) {
