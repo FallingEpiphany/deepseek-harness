@@ -38,6 +38,8 @@ The plugin owns the flow, the credential records hold the grant, and the supervi
 
 ## Consequences
 
+Strict startup keeps a pending browser authorization alive instead of rolling back the plugin and its redirect listener. The pending state requires both an issued authorization request and the SDK's typed unauthorized result; unrelated failures remain fatal when configured. A plugin-entry test exercises SDK discovery, callback exchange, and supervisor reconnection together. Transport failures expose nested error codes without nested request details, so network diagnostics do not have to infer causes from `fetch failed` alone.
+
 A server that authenticates through the MCP authorization flow is reachable, and its grant is stored where every other obtained credential lives: rotating it takes effect on the next request, and one server's records are unreachable from another's.
 
 The cost is a fixed port and a human. An authorization-code flow cannot complete without a reachable redirect URI and someone to finish the browser step, so a headless deployment without a pre-registered client cannot use this path — the SDK's non-interactive providers are the answer there and are not wired up yet. Both facts are recorded in the package's limitations rather than left for a user to discover.

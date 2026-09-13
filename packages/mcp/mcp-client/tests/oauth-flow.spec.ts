@@ -66,6 +66,9 @@ async function startAuthorizationServer(options: { refuseRefresh?: boolean } = {
   }
   const scopes = ['mcp:tools']
   app.use(mcpAuthRouter({ provider, issuerUrl, scopesSupported: scopes }))
+  app.get('/.well-known/oauth-protected-resource/mcp', (_request, response) => {
+    response.json({ resource: `${issuerUrl.origin}/mcp`, authorization_servers: [issuerUrl.origin] })
+  })
   return {
     issuerUrl,
     metadata: createOAuthMetadata({ provider, issuerUrl, scopesSupported: scopes }),
@@ -98,7 +101,7 @@ async function followAuthorization(authorizationUrl: URL): Promise<{ code: strin
 describe('authorization-code flow end to end', () => {
   it('runs discovery, registration, redirect, and exchange, then stores the grant', async () => {
     const authServer = await startAuthorizationServer()
-    const serverUrl = 'https://mcp.example/mcp'
+    const serverUrl = `${authServer.issuerUrl.origin}/mcp`
     const run = await createSession(serverUrl)
     try {
       // Pre-seeding discovery is the supported way to skip RFC 9728 here; the
@@ -130,7 +133,7 @@ describe('authorization-code flow end to end', () => {
 
   it('runs the same flow for a server that requests no scope', async () => {
     const authServer = await startAuthorizationServer()
-    const serverUrl = 'https://mcp.example/mcp'
+    const serverUrl = `${authServer.issuerUrl.origin}/mcp`
     const run = await createSession(serverUrl, { scopes: [] })
     try {
       await run.session.provider.saveDiscoveryState?.({
@@ -151,7 +154,7 @@ describe('authorization-code flow end to end', () => {
 
   it('clears the stored grant and asks for authorization again when a refresh is refused', async () => {
     const authServer = await startAuthorizationServer({ refuseRefresh: true })
-    const serverUrl = 'https://mcp.example/mcp'
+    const serverUrl = `${authServer.issuerUrl.origin}/mcp`
     const run = await createSession(serverUrl)
     try {
       await run.session.provider.saveDiscoveryState?.({

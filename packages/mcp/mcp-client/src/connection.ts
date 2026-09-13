@@ -51,6 +51,24 @@ export const RECONNECT_DEFAULTS: Required<ReconnectConfig> = Object.freeze({
 // generation is gone; timing out fails closed instead of overlapping children.
 const GENERATION_CLOSE_TIMEOUT_MS = 5_000
 
+/** Keep transport cause codes visible without logging nested request or credential data. */
+function connectionFailure(error: unknown): string {
+  const codes = new Set<string>()
+  const visited = new Set<unknown>()
+  const pending: unknown[] = [error]
+  while (pending.length > 0 && visited.size < 16) {
+    const value = pending.shift()
+    if (!(value instanceof Error) || visited.has(value)) continue
+    visited.add(value)
+    if ('code' in value && typeof value.code === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(value.code)) {
+      codes.add(value.code)
+    }
+    pending.push(value.cause)
+    if (value instanceof AggregateError) pending.push(...value.errors.slice(0, 16))
+  }
+  return `${String(error)}${codes.size === 0 ? '' : ` [${[...codes].join(', ')}]`}`
+}
+
 /** Fully resolved reconnect policy captured at plugin load. */
 export type ResolvedReconnectPolicy = Readonly<Required<ReconnectConfig>>
 
@@ -310,7 +328,7 @@ export function startConnection(
       if (oauth !== undefined && error instanceof UnauthorizedError) authorizationPending = true
       // Disposal clears current ownership before it closes the generation, so
       // only a live supervisor reports an attempt failure.
-      if (isCurrent(generation)) ctx.logger.warn(`${label}: connection attempt failed: ${String(error)}`)
+      if (isCurrent(generation)) ctx.logger.warn(`${label}: connection attempt failed: ${connectionFailure(error)}`)
       try { await generation.close() } catch { /* transport already gone */ }
       const quiesced = hasClosed() || await waitForClose(closed.promise)
       attemptSettled = true

@@ -15,6 +15,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { RECONNECT_DEFAULTS, resolveReconnectPolicy, startConnection } from './connection.ts'
@@ -292,7 +293,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // fiber (Cordis rolls it back); otherwise the error is logged and the
   // supervisor enters its reconnect loop.
   const outcome = await connection.ready
-  if (outcome.error !== undefined && config.failOnStartupError) {
+  const awaitingAuthorization = session?.awaitingUser === true && outcome.error instanceof UnauthorizedError
+  if (outcome.error !== undefined && config.failOnStartupError && !awaitingAuthorization) {
     throw new Error(`mcp-client(${config.serverName}): initial connection or tool synchronization failed`, { cause: outcome.error })
   }
 }

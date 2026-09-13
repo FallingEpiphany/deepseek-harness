@@ -124,6 +124,19 @@ function nextCallId(): ToolCallId {
 describe('reconnect supervisor', () => {
   let ctx: Context
 
+  it('reports fetch cause codes without logging nested request data', async () => {
+    const { warns } = captureLogs(ctx)
+    const network = Object.assign(new Error('private request details'), { code: 'ECONNREFUSED' })
+    mockConnect.mockRejectedValue(new TypeError('fetch failed', { cause: new AggregateError([network], 'private details') }))
+    try {
+      await apply(ctx, stdioConfig({ enabled: false }))
+      expect(warns).toContain('mcp-client(srv): connection attempt failed: TypeError: fetch failed [ECONNREFUSED]')
+      expect(warns.join('\n')).not.toContain('private')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   beforeEach(async () => {
     vi.clearAllMocks()
     instances.length = 0

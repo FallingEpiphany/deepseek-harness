@@ -217,6 +217,8 @@ OAuth 需要组合中存在凭据提供方。基础组合会加载本地存储�
 
 ## 已知限制与延期工作
 
+OAuth 等待用户同意时，即使设置 `failOnStartupError: true`，插件也保持活动；真实连接或工具发现失败仍会拒绝启动。连接诊断会附带 `ECONNREFUSED` 等底层传输错误码，但不输出底层请求详情。
+
 <a id="known-limitations-and-deferred-work"></a>
 
 

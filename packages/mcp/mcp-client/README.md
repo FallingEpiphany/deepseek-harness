@@ -217,6 +217,8 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 ## Known Limitations and Deferred Work
 
+OAuth awaiting user consent keeps the plugin active even with `failOnStartupError: true`; that option still rejects actual connection and tool-discovery failures. Connection diagnostics include nested transport error codes, such as `ECONNREFUSED`, without printing nested request details.
+
 <a id="known-limitations-and-deferred-work"></a>
 
 
